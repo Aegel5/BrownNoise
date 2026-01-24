@@ -6,12 +6,19 @@
 #include <memory>
 #include <cmath>
 #include <numbers>
+#include <filesystem>
+#include <fstream>
+namespace fs = std::filesystem;
 
 #include <simple_enum/simple_enum.hpp>
+
+#include "json.hpp"
+using json = nlohmann::json;
 
 #include <SFML/Audio.hpp>
 #include <SFML/Graphics.hpp>
 
+#include "Settings.h"
 #include "AudioStreamAutoGen.h"
 #include "AudioStreamFile.h"
 #include "Controller.h"
@@ -27,3 +34,4 @@ int main(int argc, char* argv[])
 
     return 0;
 }
+

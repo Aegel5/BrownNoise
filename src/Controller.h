@@ -16,26 +16,23 @@ class Controller {
         {AudioStreamAutoGen::Mode::Red3},
         {AudioStreamAutoGen::Mode::Red4},
     };
-    int iEntry = -1;
+    int iEntry = 0;
 
     std::unique_ptr<sf::SoundStream> stream;
 
     bool keys[sf::Keyboard::KeyCount] = { false };
 
-    void NextTrack(bool forward = true) {
-
-        auto vol = 5;
+    void NextTrack(int forward = 0) {
 
         if (stream) {
-            vol = stream->getVolume();
             stream->stop();
         }
 
-        if (forward) {
+        if (forward>0) {
             iEntry++;
             if (iEntry >= entries.size()) iEntry = 0;
         }
-        else {
+        if(forward<0){
             iEntry--;
             if (iEntry < 0) iEntry = entries.size() - 1;
         }
@@ -51,10 +48,11 @@ class Controller {
 
         }
 
-        stream->setVolume(vol);
+        stream->setVolume(Settings::data.volume);
         stream->play();
 
-
+        Settings::data.last_mode = (int)cur.mode;
+        Settings::Save();
         std::cout << "--------- Start play " << cur.name() << "\n";
 
     }
@@ -74,25 +72,32 @@ class Controller {
 
 public:
 
+    void set_vol(float delt) {
+        auto v = std::clamp(std::round(stream->getVolume() + delt), 0.0f, 100.0f);
+        if (v == stream->getVolume()) return;
+        stream->setVolume(v);
+        std::cout << "Set volume " << stream->getVolume() << "\n";
+        Settings::data.volume = stream->getVolume();
+        Settings::Save();
+    }
+
     void Process() {
         int step = 1;
 
         if (was_down(sf::Keyboard::Key::Up)) {
-            stream->setVolume(std::min(100.0f, std::round(stream->getVolume() + step)));
-            std::cout << "Set volume " << stream->getVolume() << "\n";
+            set_vol(1);
         }
 
         else if (was_down(sf::Keyboard::Key::Down)) {
-            stream->setVolume(std::round(std::max(0.0f, stream->getVolume() - step)));
-            std::cout << "Set volume " << stream->getVolume() << "\n";
+            set_vol(-1);
         }
 
         else if (was_down(sf::Keyboard::Key::Right)) {
-            NextTrack();
+            NextTrack(1);
         }
 
         else if (was_down(sf::Keyboard::Key::Left)) {
-            NextTrack(false);
+            NextTrack(-1);
         }
 
         else if (was_down(sf::Keyboard::Key::Space) || was_down(sf::Keyboard::Key::Enter)) {
@@ -108,6 +113,14 @@ public:
     }
 
     Controller() {
+        Settings::Load();
+        for (int i = -1;  auto item : entries) {
+            i++;
+            if ((int)item.mode == Settings::data.last_mode) {
+                iEntry = i;
+                break;
+            }
+        }
         NextTrack();
     }
 };
