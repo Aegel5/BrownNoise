@@ -73,7 +73,14 @@
 public:
 
     void set_vol(float delt) {
-        auto v = std::clamp(std::round(stream->getVolume() + delt), 0.0f, 100.0f);
+        if (stream->getVolume() <= 5) {
+            delt /= 2;
+        }
+        auto v = stream->getVolume() + delt;
+        auto v2 = std::round(v);
+        if (std::abs(v - v2) <= 0.001f) v = v2;
+        if (v > 5) v = std::round(v + 0.1f);
+        v = std::clamp(v, 0.0f, 100.0f);
         if (v == stream->getVolume()) return;
         stream->setVolume(v);
         std::cout << "Set volume " << stream->getVolume() << "\n";
