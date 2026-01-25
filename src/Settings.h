@@ -1,4 +1,4 @@
-struct _Settings {
+﻿struct _Settings {
     float volume = 5;
     int last_mode = 0;
 };

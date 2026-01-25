@@ -1,4 +1,4 @@
-class Controller {
+﻿class Controller {
 
     struct PlayEntry {
         AudioStreamAutoGen::Mode mode;

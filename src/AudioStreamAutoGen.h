@@ -1,20 +1,13 @@
-
-using int16 = std::int16_t;
-//static const auto v_min = std::numeric_limits<int16>::min();
-//static const auto v_max = std::numeric_limits<int16>::max();
-static const int v_min = -32760;
-static const int v_max = 32760;
-
-
+п»ї
 
 
 namespace Rand {
-    std::mt19937 m_rng{ std::random_device{}() };        // Быстрый генератор PRNG
-    auto randf(auto a, auto b) {
+    std::mt19937 m_rng{ std::random_device{}() };        // Р‘С‹СЃС‚СЂС‹Р№ РіРµРЅРµСЂР°С‚РѕСЂ PRNG
+    auto rand_real(auto a, auto b) {
         std::uniform_real_distribution<decltype(a)> d( a, b );
         return d(m_rng);
     }
-    auto randi(auto a, auto b) {
+    auto rand_i(auto a, auto b) {
         std::uniform_int_distribution<decltype(a)> d(a, b);
         return d(m_rng);
     }
@@ -25,24 +18,28 @@ namespace Rand {
 
 
 class AudioStreamAutoGen : public sf::SoundStream {
+
+    static const int v_min = -32700;
+    static const int v_max = 32700;
+    static const int smpl_per_sec = 44100;
+
 public:
     enum class Mode { Red1, Red2, Red3, Red4, Red5, Test_La, White };
 private:
-    static const int smpl_per_sec = 44100;
 
     Mode mode = Mode::Red1;
-    std::vector<int16> samples;
+    std::vector<int16_t> samples;
     int prev = 0;
 
-    inline static const double m_frequency = 440.0;      // Частота ноты Ля
+    inline static const double m_frequency = 440.0;      // Р§Р°СЃС‚РѕС‚Р° РЅРѕС‚С‹ Р›СЏ
     inline static const double phaseStep = (2.0 * std::numbers::pi * m_frequency) / smpl_per_sec;
-    double m_phase = 0;              // Текущая фаза (сохраняется между вызовами)
+    double m_phase = 0;              // РўРµРєСѓС‰Р°СЏ С„Р°Р·Р° (СЃРѕС…СЂР°РЅСЏРµС‚СЃСЏ РјРµР¶РґСѓ РІС‹Р·РѕРІР°РјРё)
 
-    // Состояния для интерполяции
-    float m_target = 0.0f;      // Куда движемся
-    float m_previous = 0.0f;    // Откуда вышли
-    int m_stepCount = 0;        // Сколько семплов прошло
-    const int m_stepsPerChange = 180; // И
+    // РЎРѕСЃС‚РѕСЏРЅРёСЏ РґР»СЏ РёРЅС‚РµСЂРїРѕР»СЏС†РёРё
+    float m_target = 0.0f;      // РљСѓРґР° РґРІРёР¶РµРјСЃСЏ
+    float m_previous = 0.0f;    // РћС‚РєСѓРґР° РІС‹С€Р»Рё
+    int m_stepCount = 0;        // РЎРєРѕР»СЊРєРѕ СЃРµРјРїР»РѕРІ РїСЂРѕС€Р»Рѕ
+    const int m_stepsPerChange = 180; // Р
 
     double m_lastOutput = 0;
 
@@ -69,12 +66,10 @@ public:
 
         if (mode == Mode::Red2) {
 
-            //auto cur = (double)rand16_s() / 10;
-            auto cur = (double)v_max / 8;
+            auto cur = v_max / 8.0;
 
             if (Rand::rand_bool()) cur = -cur;
             if (abs(prev + cur) > v_max) cur = -cur;
-            //if ((prev == v_min && cur < 0) || (prev == v_max && cur > 0)) { cur = -cur; }
 
             if ((prev > 0 && cur < 0) || (prev < 0 && cur > 0)) { auto k = 1 + (0.5 * (double)abs(prev) / v_max); cur *= k; }
 
@@ -83,14 +78,14 @@ public:
         }
 
         if (mode == Mode::Test_La) {
-            // Формула шага фазы: 2 * PI * частота / частота_дискретизации
+            // Р¤РѕСЂРјСѓР»Р° С€Р°РіР° С„Р°Р·С‹: 2 * PI * С‡Р°СЃС‚РѕС‚Р° / С‡Р°СЃС‚РѕС‚Р°_РґРёСЃРєСЂРµС‚РёР·Р°С†РёРё
 
-           // Генерируем значение от -32767 до 32767
+           // Р“РµРЅРµСЂРёСЂСѓРµРј Р·РЅР°С‡РµРЅРёРµ РѕС‚ -32767 РґРѕ 32767
             auto res = std::round(30000 * std::sin(m_phase));
 
             m_phase += phaseStep;
 
-            // Чтобы фаза не росла бесконечно (хотя для double это не критично)
+            // Р§С‚РѕР±С‹ С„Р°Р·Р° РЅРµ СЂРѕСЃР»Р° Р±РµСЃРєРѕРЅРµС‡РЅРѕ (С…РѕС‚СЏ РґР»СЏ double СЌС‚Рѕ РЅРµ РєСЂРёС‚РёС‡РЅРѕ)
             if (m_phase > 2.0 * std::numbers::pi)
                 m_phase -= 2.0 * std::numbers::pi;
 
@@ -98,21 +93,21 @@ public:
         }
 
         if (mode == Mode::White) {
-            return Rand::randi(v_min, v_max);
+            return Rand::rand_i(v_min, v_max);
         }
 
         if (mode == Mode::Red3) {
-            // Если дошли до цели, выбираем новую
+            // Р•СЃР»Рё РґРѕС€Р»Рё РґРѕ С†РµР»Рё, РІС‹Р±РёСЂР°РµРј РЅРѕРІСѓСЋ
             if (m_stepCount >= m_stepsPerChange) {
                 m_previous = m_target;
-                m_target = Rand::randf((float)v_min, (float)v_max);
+                m_target = Rand::rand_real((float)v_min, (float)v_max);
                 m_stepCount = 0;
             }
 
-            // Вычисляем прогресс (от 0.0 до 1.0)
+            // Р’С‹С‡РёСЃР»СЏРµРј РїСЂРѕРіСЂРµСЃСЃ (РѕС‚ 0.0 РґРѕ 1.0)
             float t = static_cast<float>(m_stepCount) / m_stepsPerChange;
 
-            // Плавная интерполяция между точками
+            // РџР»Р°РІРЅР°СЏ РёРЅС‚РµСЂРїРѕР»СЏС†РёСЏ РјРµР¶РґСѓ С‚РѕС‡РєР°РјРё
             float val = m_previous + (m_target - m_previous) * smoothStep(t);
 
             m_stepCount++;
@@ -121,9 +116,9 @@ public:
 
         if (mode == Mode::Red4) {
 
-            // мягкий шум - автовозврат через тангенс к 0.
+            // РјСЏРіРєРёР№ С€СѓРј - Р°РІС‚РѕРІРѕР·РІСЂР°С‚ С‡РµСЂРµР· С‚Р°РЅРіРµРЅСЃ Рє 0.
 
-            m_lastOutput = (0.997 * m_lastOutput) + (0.02 * Rand::randf(-1.0, 1.0));
+            m_lastOutput = (0.997 * m_lastOutput) + (0.02 * Rand::rand_real(-1.0, 1.0));
             m_lastOutput = std::tanh(m_lastOutput);
 
             auto res = std::round(m_lastOutput * v_max*2);
@@ -147,7 +142,7 @@ private:
 
     virtual void onSeek(sf::Time timeOffset) override { return; }
 public:
-    const int16* GetSamples() {
+    const auto* GetSamples() {
         return &samples[0];
     }
     int GetSamplesCount() {

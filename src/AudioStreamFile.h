@@ -1,4 +1,4 @@
-class AudioStreamFile : public sf::SoundStream {
+﻿class AudioStreamFile : public sf::SoundStream {
 
     sf::SoundBuffer buff;
     bool first = false;
@@ -22,7 +22,7 @@ public:
         }
         return false;
     }
-    const int16* GetSamples() {
+    const auto* GetSamples() {
         return buff.getSamples();
     }
     int GetSamplesCount() {
