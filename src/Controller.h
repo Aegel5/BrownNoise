@@ -70,8 +70,6 @@
         return keys[(int)k] && sf::Keyboard::isKeyPressed(sf::Keyboard::Key::F1);
     }
 
-public:
-
     void set_vol(float delt) {
         if (stream->getVolume() <= 5) {
             delt /= 2;
@@ -87,6 +85,8 @@ public:
         Settings::data.volume = stream->getVolume();
         Settings::Save();
     }
+
+public:
 
     void Process() {
         int step = 1;
