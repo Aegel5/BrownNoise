@@ -5,7 +5,7 @@
         std::string file;
         bool isFile() { return !file.empty(); };
         std::string name() {
-            if (isFile()) return name();
+            if (isFile()) return file;
             return (std::string)simple_enum::enum_name(mode);
         }
     };
@@ -16,7 +16,6 @@
         {AudioStreamAutoGen::Mode::Red3},
         {AudioStreamAutoGen::Mode::Red4},
     };
-    int iEntry = 0;
 
     std::unique_ptr<sf::SoundStream> stream;
 
@@ -27,6 +26,8 @@
         if (stream) {
             stream->stop();
         }
+
+        int& iEntry = Settings::data.last_mode;
 
         if (forward>0) {
             iEntry++;
@@ -51,7 +52,6 @@
         stream->setVolume(Settings::data.volume);
         stream->play();
 
-        Settings::data.last_mode = (int)cur.mode;
         Settings::Save();
         std::cout << "--------- Start play " << cur.name() << "\n";
 
@@ -121,13 +121,6 @@ public:
 
     Controller() {
         Settings::Load();
-        for (int i = -1;  auto item : entries) {
-            i++;
-            if ((int)item.mode == Settings::data.last_mode) {
-                iEntry = i;
-                break;
-            }
-        }
         NextTrack();
     }
 };
