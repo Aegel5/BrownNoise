@@ -8,6 +8,7 @@
 #include <numbers>
 #include <filesystem>
 #include <fstream>
+#include <format>
 namespace fs = std::filesystem;
 
 #include <simple_enum/simple_enum.hpp>
