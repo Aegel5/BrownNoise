@@ -18,6 +18,7 @@ using json = nlohmann::json;
 #include <SFML/Audio.hpp>
 #include <SFML/Graphics.hpp>
 
+#include "GetDir.h"
 #include "Settings.h"
 #include "AudioStreamAutoGen.h"
 #include "AudioStreamFile.h"

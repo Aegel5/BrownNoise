@@ -16,14 +16,14 @@ namespace Settings {
     inline _Settings data;
 
     inline void Save() {
-        fs::path path = fs::current_path() / "BrownNoise.json";
+        fs::path path = getExeDirectory() / "BrownNoise.json";
         std::ofstream outp(path, std::ios::binary);
         json js = data;
         outp << std::setw(2) << js << std::endl;
     }
 
     inline void Load() {
-        fs::path path = fs::current_path() / "BrownNoise.json";
+        fs::path path = getExeDirectory() / "BrownNoise.json";
         if (!std::filesystem::is_regular_file(path)) {
             return;
         }
