@@ -1,6 +1,6 @@
 # BrownNoise
 
-Brown noise generator written on C++
+Brown noise generator written in C++
 
 ## Key Controls
 - `F1 + Right` - next mode
