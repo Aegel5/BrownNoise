@@ -78,6 +78,12 @@
         auto v2 = std::round(v);
         if (std::abs(v - v2) <= 0.001f) v = v2;
         if (v > 5) v = std::round(v + 0.1f);
+        SetVolume(v);
+    }
+
+public:
+
+    void SetVolume(float v) {
         v = std::clamp(v, 0.0f, 100.0f);
         if (v == stream->getVolume()) return;
         stream->setVolume(v);
@@ -85,8 +91,6 @@
         Settings::data.volume = stream->getVolume();
         Settings::Save();
     }
-
-public:
 
     void Process() {
         int step = 1;
