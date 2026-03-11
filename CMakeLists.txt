@@ -6,6 +6,11 @@ project(BrownNoise VERSION 1.0 LANGUAGES CXX)
 
 set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
 
+if(MSVC)
+    # Заставляет MSVC интерпретировать исходники и строки как UTF-8
+    add_compile_options("/utf-8")
+endif()
+
 if (NOT TARGET sfml)
     message(STATUS "Fetching sfml")
     include(FetchContent)

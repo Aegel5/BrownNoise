@@ -43,7 +43,7 @@ int main(int argc, char* argv[])
 
     Controller controller;
 
-    std::cout << (char*)u8"Введите команду: число для установки Volume или exit\n";
+    std::cout << "Введите команду: число для установки Volume или exit\n";
 
     // Инициализируем первое ожидание
     auto future_input = get_input();
