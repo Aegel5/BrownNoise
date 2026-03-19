@@ -40,10 +40,12 @@ int main(int argc, char* argv[])
             });
         };
 
+    std::cout << "Brown Noise Version 1.5\n";
 
     Controller controller;
 
-    std::cout << "Введите команду: число для установки Volume или exit\n";
+    std::cout << "Введите команду: число для установки Volume или exit для выхода" << std::endl;
+
 
     // Инициализируем первое ожидание
     auto future_input = get_input();

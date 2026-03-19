@@ -53,7 +53,7 @@
         stream->play();
 
         Settings::Save();
-        std::cout << std::format("--------- Start play {}. Volume {}\n", cur.name(), stream->getVolume());
+        std::cout << std::format("Now playing: {}. Volume: {}\n", cur.name(), stream->getVolume());
 
     }
     bool was_changes(sf::Keyboard::Key k) {
