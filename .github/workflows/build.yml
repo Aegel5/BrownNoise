@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - main # или любое имя твоей ветки
+      
+permissions:
+  contents: write # позволяет создавать теги и релизы      
 
 jobs:
   build-and-release:
