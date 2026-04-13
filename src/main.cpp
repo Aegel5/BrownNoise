@@ -19,18 +19,18 @@ namespace fs = std::filesystem;
 #include "json.hpp"
 using json = nlohmann::json;
 
-#include <SFML/Audio.hpp>
-#include <SFML/Graphics.hpp>
-
 #include "GetDir.h"
 #include "Settings.h"
-#include "AudioStreamAutoGen.h"
-#include "AudioStreamFile.h"
-#include "Controller.h"
+#include "Rand.h"
+#include "Red1.h"
+#include "Player.h"
+
 
 int main(int argc, char* argv[])
 {
     setlocale(LC_ALL, ".utf8");
+
+    Settings::Load();
 
     // Лямбда-функция прямо внутри main для создания задачи чтения
     auto get_input = []() {
@@ -40,9 +40,22 @@ int main(int argc, char* argv[])
             });
         };
 
-    std::cout << "Brown Noise Version 1.5\n";
+    std::cout << std::format("Brown Noise Version 1.5\n");
 
-    Controller controller;
+    Player player;
+
+    auto set_volume = [&](float f) {
+        f = std::clamp(f, 0.0f, 200.0f);
+        std::cout << std::format("Volume: {}\n", f);
+        player.set_volume(f / 100);
+        if (f != Settings::data.volume) {
+            Settings::data.volume = f;
+            Settings::Save();
+        }
+        };
+
+    set_volume(Settings::data.volume);
+    player.start();
 
     std::cout << "Введите команду: число для установки Volume или exit для выхода" << std::endl;
 
@@ -68,14 +81,14 @@ int main(int argc, char* argv[])
 
             // Если ошибок нет (ec == success) и мы дошли до конца строки (ptr == end)
             if (ec == std::errc() && ptr == result.data() + result.size()) {
-                controller.SetVolume(val);
+                set_volume(val);
                 continue;
             }
 
         }
 
-        controller.Process();
-        sf::sleep(sf::seconds(0.02));
+        player.step();
+        std::this_thread::sleep_for(std::chrono::milliseconds(200));
     }
 
     return 0;
