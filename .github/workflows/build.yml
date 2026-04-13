@@ -1,0 +1,42 @@
+﻿name: Build and Release
+
+on:
+  push:
+    branches:
+      - main # или любое имя твоей ветки
+
+jobs:
+  build-and-release:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure CMake
+        run: cmake -B build -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build project
+        run: cmake --build build --config Release
+
+      - name: Delete Old Release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Удаляем тег и релиз, если они существуют (игнорируем ошибки, если их нет)
+          gh release delete latest --yes --cleanup-tag || true
+        shell: pwsh
+
+      - name: Create New Release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Укажи правильный путь к твоему .exe файлу после билда
+          # Обычно это build/Release/ProjectName.exe
+          $exePath = Get-ChildItem -Path build/Release/BrownNoise.exe | Select-Object -ExpandProperty FullName
+          
+          gh release create latest $exePath `
+            --title "Latest Build" `
+            --notes "Автоматический билд от $(Get-Date -Format 'yyyy-MM-dd HH:mm')" `
+            --target ${{ github.sha }}
+        shell: pwsh
