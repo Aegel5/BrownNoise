@@ -53,9 +53,9 @@ public:
 
     void set_volume(float vol) { 
         m_volume = vol; 
-        m_w = m_r + 2; // частично сбросим буфер
-
+        m_w = m_r;
     }
+
 
     void step() {
         while (m_w - m_r.load(std::memory_order_relaxed) < TOTAL_CHUNKS) {

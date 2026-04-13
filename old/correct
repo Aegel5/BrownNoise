@@ -1,0 +1,38 @@
+    void correct_volume(float new_vol) {
+        size_t r_now = m_r.load(std::memory_order_relaxed);
+        size_t w_now = m_w;
+
+        size_t total_samples = (w_now - r_now) * CHUNK_SIZE;
+        if (total_samples == 0) {
+            return;
+        }
+
+        float vol_cursor = m_volume;
+        // 1. Шаг для плавности (весь диапазон 1.0 за 0.5 сек)
+        const float step_smooth = 1.0f / 24000.0f;
+
+        // 2. Шаг для гарантии (успеть изменить разницу за имеющееся количество семплов)
+        float vol_diff = std::abs(new_vol - m_volume);
+        float step_guaranteed = vol_diff / (float)total_samples;
+
+        // Выбираем максимальный, чтобы либо быть плавным, либо успеть вовремя
+        const float step_val = std::max(step_smooth, step_guaranteed);
+
+        for (size_t i = r_now; i < w_now; ++i) {
+            auto& chunk = m_chunks[i % TOTAL_CHUNKS];
+
+            for (float& smpl : chunk) {
+                // Плавно меняем курсор
+                if (vol_cursor < new_vol) vol_cursor = std::min(vol_cursor + step_val, new_vol);
+                else if (vol_cursor > new_vol) vol_cursor = std::max(vol_cursor - step_val, new_vol);
+
+                // Пересчитываем семпл
+                if (m_volume > 1e-6f) {
+                    smpl = (smpl / m_volume) * vol_cursor;
+                }
+                else {
+                    smpl = 0.0f; // Если был 0, шум не восстановить
+                }
+            }
+        }
+    }
