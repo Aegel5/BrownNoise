@@ -18,40 +18,57 @@ class Player {
     SineGenerator sin;
     int m_channels;
     int channels() const { return m_channels; }
-
+    ma_hpf hpf; 
+    ma_noise noise;
 public:
     void start() {
-
-
         step(); // забиваем буфер
         ma_device_start(&m_device);
     }
     Player() {
-        auto config = ma_device_config_init(ma_device_type_playback);
 
-        config.playback.format = ma_format_f32;
-        //config.playback.channels = 1;
+        // device
+        {
+            auto config = ma_device_config_init(ma_device_type_playback);
 
-        config.periodSizeInFrames = CHUNK_SIZE;
-        config.periods = 8;
+            config.playback.format = ma_format_f32;
+            //config.playback.channels = 1;
 
-        config.dataCallback = [](ma_device* pD, void* pOut, const void*, ma_uint32 fCount) {
+            config.periodSizeInFrames = CHUNK_SIZE;
+            config.periods = 8;
 
-            auto* self = (Player*)pD->pUserData;
-            float* out = (float*)pOut;
+            config.dataCallback = [](ma_device* pD, void* pOut, const void*, ma_uint32 fCount) {
 
-            size_t r = self->m_r.load(std::memory_order_relaxed);
-            const float* chunkData = self->m_chunks[r % TOTAL_CHUNKS].data();
-            memcpy(pOut, chunkData, fCount * sizeof(float) * self->channels());
-            self->m_r.store(r + 1, std::memory_order_relaxed);
+                auto* self = (Player*)pD->pUserData;
+                float* out = (float*)pOut;
 
-            };
-        config.pUserData = this;
+                size_t r = self->m_r.load(std::memory_order_relaxed);
+                const float* chunkData = self->m_chunks[r % TOTAL_CHUNKS].data();
+                memcpy(pOut, chunkData, fCount * sizeof(float) * self->channels());
+                self->m_r.store(r + 1, std::memory_order_relaxed);
 
-        ma_device_init(NULL, &config, &m_device);
-        m_channels = m_device.playback.channels;
+                };
+            config.pUserData = this;
+
+            ma_device_init(NULL, &config, &m_device);
+            m_channels = m_device.playback.channels;
+        }
 
         m_chunks.resize(TOTAL_CHUNKS, std::vector<float>(CHUNK_SIZE*channels()));
+
+        // Фильтр низких частот.
+        {
+            auto cfg = ma_hpf_config_init(ma_format_f32, channels(), m_device.sampleRate, 5, 1);
+            if (ma_hpf_init(&cfg, 0, &hpf)) {
+                std::terminate();
+            }
+        }
+
+        // Стандартный генератор
+        {
+            auto cfg = ma_noise_config_init(ma_format_f32, channels(), ma_noise_type_brownian, 0, 0.5);
+            ma_noise_init(&cfg, 0, &noise);
+        }
 
     }
 
@@ -68,6 +85,11 @@ public:
         auto ch = channels();
         while (m_w - m_r.load(std::memory_order_relaxed) < TOTAL_CHUNKS) {
             auto& chunk = m_chunks[m_w % TOTAL_CHUNKS];
+
+            // стандартный генератор
+            //ma_noise_read_pcm_frames(&noise, &chunk[0], CHUNK_SIZE, 0);
+            //ma_apply_volume_factor_pcm_frames(&chunk[0], CHUNK_SIZE, ma_format_f32, ch, m_volume);
+
             for (int64_t i = 0; i < CHUNK_SIZE; i++) {
                 auto left = red1_left.Next() * m_volume;
                 auto right = red1_right.Next() * m_volume;
@@ -86,6 +108,16 @@ public:
                     }
                 }
             }
+
+            // накладываем ФВЧ: централизуем график возле 0 (нормализуем мембрану), а также убираем весь неслышимый инфра-мусор (звук меньше 10 ГЦ).
+            ma_hpf_process_pcm_frames(&hpf, &chunk[0], &chunk[0], CHUNK_SIZE);
+
+            //for (int64_t i = 0; i < ssize(chunk); i++) {
+            //    if (chunk[i] > 1.0 || chunk[i] < -1.0) {
+            //        int k = 0;
+            //    }
+            //}
+            
 
             m_w++;
         }
