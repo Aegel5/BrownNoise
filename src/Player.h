@@ -13,7 +13,8 @@ class Player {
     std::atomic<int64_t> m_r{ 0 };
     int64_t m_w = 0;
     float m_volume { 0.1f };
-    Red1 red1;
+    Red1 red1_left;
+    Red1 red1_right;
     SineGenerator sin;
 
     int channels() const { return m_device.playback.channels; }
@@ -67,9 +68,21 @@ public:
         while (m_w - m_r.load(std::memory_order_relaxed) < TOTAL_CHUNKS) {
             auto& chunk = m_chunks[m_w % TOTAL_CHUNKS];
             for (int64_t i = 0; i < CHUNK_SIZE; i++) {
-                auto cur = red1.Next() * m_volume;
-                for (int64_t j = 0; j < ch; j++) {
-                    chunk[i * ch + j] = cur;
+                auto left = red1_left.Next() * m_volume;
+                auto right = red1_right.Next() * m_volume;
+
+                if (ch == 6) { // Спец-обработка для 5.1
+                    chunk[i * ch + 0] = left;              // Front L
+                    chunk[i * ch + 1] = right;             // Front R
+                    chunk[i * ch + 2] = (left + right) * 0.5f; // Center
+                    chunk[i * ch + 3] = (left + right) * 0.5f; // LFE (Саб)
+                    chunk[i * ch + 4] = left;              // Surround L
+                    chunk[i * ch + 5] = right;             // Surround R
+                }
+                else {
+                    for (int64_t j = 0; j < ch; j++) {
+                        chunk[i * ch + j] = (j & 1) ? right : left;
+                    }
                 }
             }
 
