@@ -16,8 +16,8 @@ class Player {
     Red1 red1_left;
     Red1 red1_right;
     SineGenerator sin;
-
-    int channels() const { return m_device.playback.channels; }
+    int m_channels;
+    int channels() const { return m_channels; }
 
 public:
     void start() {
@@ -49,6 +49,7 @@ public:
         config.pUserData = this;
 
         ma_device_init(NULL, &config, &m_device);
+        m_channels = m_device.playback.channels;
 
         m_chunks.resize(TOTAL_CHUNKS, std::vector<float>(CHUNK_SIZE*channels()));
 
