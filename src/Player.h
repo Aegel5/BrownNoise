@@ -74,8 +74,10 @@ public:
 
         // Плавная громкость.
         {
-            auto cfg = ma_gainer_config_init(channels(), CHUNK_SIZE);
+            auto cfg = ma_gainer_config_init(channels(), m_device.sampleRate/4);
             ma_gainer_init(&cfg, NULL, &gainer);
+            ma_gainer_set_master_volume(&gainer, 1.0f);
+            ma_gainer_set_gain(&gainer, 0.0f);
         }
 
     }
@@ -86,7 +88,7 @@ public:
 
         m_volume = vol; 
         m_w = m_r;
-        ma_gainer_set_master_volume(&gainer, vol);
+        ma_gainer_set_gain(&gainer, vol);
     }
 
 
@@ -97,7 +99,6 @@ public:
 
             // стандартный генератор
             ma_noise_read_pcm_frames(&noise, &chunk[0], CHUNK_SIZE, 0);
-            //ma_apply_volume_factor_pcm_frames(&chunk[0], CHUNK_SIZE, ma_format_f32, ch, m_volume);
 
             //for (int64_t i = 0; i < CHUNK_SIZE; i++) {
             //    auto left = red1[0].Next();
