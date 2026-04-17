@@ -2,6 +2,7 @@
 #include <vector>
 #include <atomic>
 #include "Red1.h"
+#include "Voss.h"
 #include "SinGenerate.h"
 
 class Player {
@@ -13,13 +14,14 @@ class Player {
     std::atomic<int64_t> m_r{ 0 };
     int64_t m_w = 0;
     float m_volume { 0.1f };
-    Red1 red1_left;
-    Red1 red1_right;
+    Red1 red1[2];
     SineGenerator sin;
     int m_channels;
     int channels() const { return m_channels; }
     ma_hpf hpf; 
     ma_noise noise;
+    Voss voss[2];
+    ma_gainer gainer;
 public:
     void start() {
         step(); // забиваем буфер
@@ -58,7 +60,7 @@ public:
 
         // Фильтр низких частот.
         {
-            auto cfg = ma_hpf_config_init(ma_format_f32, channels(), m_device.sampleRate, 5, 1);
+            auto cfg = ma_hpf_config_init(ma_format_f32, channels(), m_device.sampleRate, 50, 2); // order 1 может не хватить для борьбы с залипанием мембраны.
             if (ma_hpf_init(&cfg, 0, &hpf)) {
                 std::terminate();
             }
@@ -70,6 +72,12 @@ public:
             ma_noise_init(&cfg, 0, &noise);
         }
 
+        // Плавная громкость.
+        {
+            auto cfg = ma_gainer_config_init(channels(), CHUNK_SIZE);
+            ma_gainer_init(&cfg, NULL, &gainer);
+        }
+
     }
 
     ~Player() { ma_device_uninit(&m_device); }
@@ -78,6 +86,7 @@ public:
 
         m_volume = vol; 
         m_w = m_r;
+        ma_gainer_set_master_volume(&gainer, vol);
     }
 
 
@@ -87,36 +96,43 @@ public:
             auto& chunk = m_chunks[m_w % TOTAL_CHUNKS];
 
             // стандартный генератор
-            //ma_noise_read_pcm_frames(&noise, &chunk[0], CHUNK_SIZE, 0);
+            ma_noise_read_pcm_frames(&noise, &chunk[0], CHUNK_SIZE, 0);
             //ma_apply_volume_factor_pcm_frames(&chunk[0], CHUNK_SIZE, ma_format_f32, ch, m_volume);
 
-            for (int64_t i = 0; i < CHUNK_SIZE; i++) {
-                auto left = red1_left.Next() * m_volume;
-                auto right = red1_right.Next() * m_volume;
+            //for (int64_t i = 0; i < CHUNK_SIZE; i++) {
+            //    auto left = red1[0].Next();
+            //    auto right = red1[1].Next();
 
-                if (ch == 6) { // Спец-обработка для 5.1
-                    chunk[i * ch + 0] = left;              // Front L
-                    chunk[i * ch + 1] = right;             // Front R
-                    chunk[i * ch + 2] = (left + right) * 0.5f; // Center
-                    chunk[i * ch + 3] = (left + right) * 0.5f; // LFE (Саб)
-                    chunk[i * ch + 4] = left;              // Surround L
-                    chunk[i * ch + 5] = right;             // Surround R
-                }
-                else {
-                    for (int64_t j = 0; j < ch; j++) {
-                        chunk[i * ch + j] = (j & 1) ? right : left;
-                    }
-                }
-            }
+            //    //auto left = voss[0].generate_smooth_voss() * m_volume;
+            //    //auto right = voss[1].generate_smooth_voss() * m_volume;
+
+            //    if (ch == 6) { // Спец-обработка для 5.1
+            //        chunk[i * ch + 0] = left;              // Front L
+            //        chunk[i * ch + 1] = right;             // Front R
+            //        chunk[i * ch + 2] = (left + right) * 0.5f; // Center
+            //        chunk[i * ch + 3] = (left + right) * 0.5f; // LFE (Саб)
+            //        chunk[i * ch + 4] = left;              // Surround L
+            //        chunk[i * ch + 5] = right;             // Surround R
+            //    }
+            //    else {
+            //        for (int64_t j = 0; j < ch; j++) {
+            //            chunk[i * ch + j] = (j & 1) ? right : left;
+            //        }
+            //    }
+            //}
 
             // накладываем ФВЧ: централизуем график возле 0 (нормализуем мембрану), а также убираем весь неслышимый инфра-мусор (звук меньше 10 ГЦ).
             ma_hpf_process_pcm_frames(&hpf, &chunk[0], &chunk[0], CHUNK_SIZE);
 
-            //for (int64_t i = 0; i < ssize(chunk); i++) {
-            //    if (chunk[i] > 1.0 || chunk[i] < -1.0) {
-            //        int k = 0;
-            //    }
-            //}
+            ma_gainer_process_pcm_frames(&gainer, &chunk[0], &chunk[0], CHUNK_SIZE);
+
+#ifdef _DEBUG
+            for (int64_t i = 0; i < ssize(chunk); i++) {
+                if (chunk[i] > 1.0 || chunk[i] < -1.0) {
+                    std::terminate();
+                }
+            }
+#endif
             
 
             m_w++;
