@@ -13,7 +13,8 @@ class Player {
     std::vector<std::vector<float>> m_chunks;
     std::atomic<int64_t> m_r{ 0 };
     int64_t m_w = 0;
-    float m_volume { 0.1f };
+    std::atomic<float> m_volume = 0;
+    float m_last_volume = 0;
     Red1 red1[2];
     SineGenerator sin;
     int m_channels;
@@ -21,7 +22,8 @@ class Player {
     ma_hpf hpf; 
     ma_noise noise;
     Voss voss[2];
-    ma_gainer gainer;
+
+    ma_gainer m_gainer; // проходим через барьер памяти, синхронизации не требуется.
 public:
     void start() {
         step(); // забиваем буфер
@@ -46,7 +48,19 @@ public:
 
                 size_t r = self->m_r.load(std::memory_order_relaxed);
                 const float* chunkData = self->m_chunks[r % TOTAL_CHUNKS].data();
-                memcpy(pOut, chunkData, fCount * sizeof(float) * self->channels());
+
+                // громоксть - самая частая операция, делаем прямо в audio-потоке, чтобы не перегенеривать весь буфер.
+                {
+                    auto vol = self->m_volume.load(std::memory_order_relaxed);
+                    if (vol != self->m_last_volume) {
+                        self->m_last_volume = vol;
+                        ma_gainer_set_gain(&self->m_gainer, vol);
+                    }
+                    ma_gainer_process_pcm_frames(&self->m_gainer, pOut, chunkData, CHUNK_SIZE);
+                }
+
+                //memcpy(pOut, chunkData, fCount * sizeof(float) * self->channels());
+
                 self->m_r.store(r + 1, std::memory_order_relaxed);
 
                 };
@@ -75,20 +89,22 @@ public:
         // Плавная громкость.
         {
             auto cfg = ma_gainer_config_init(channels(), m_device.sampleRate/4);
-            ma_gainer_init(&cfg, NULL, &gainer);
-            ma_gainer_set_master_volume(&gainer, 1.0f);
-            ma_gainer_set_gain(&gainer, 0.0f);
+            ma_gainer_init(&cfg, NULL, &m_gainer);
+            ma_gainer_set_master_volume(&m_gainer, 1.0f);
+            ma_gainer_set_gain(&m_gainer, 0.0f);
         }
 
     }
 
-    ~Player() { ma_device_uninit(&m_device); }
+    ~Player() { 
+        ma_device_uninit(&m_device); 
+    }
 
     void set_volume(float vol) { 
 
-        m_volume = vol; 
-        m_w = m_r;
-        ma_gainer_set_gain(&gainer, vol);
+        m_volume.store(vol, std::memory_order_relaxed);
+        //m_w = m_r;
+        //ma_gainer_set_gain(&gainer, vol);
     }
 
 
@@ -125,7 +141,7 @@ public:
             // накладываем ФВЧ: централизуем график возле 0 (нормализуем мембрану), а также убираем весь неслышимый инфра-мусор (звук меньше 10 ГЦ).
             ma_hpf_process_pcm_frames(&hpf, &chunk[0], &chunk[0], CHUNK_SIZE);
 
-            ma_gainer_process_pcm_frames(&gainer, &chunk[0], &chunk[0], CHUNK_SIZE);
+            //ma_gainer_process_pcm_frames(&gainer, &chunk[0], &chunk[0], CHUNK_SIZE);
 
 #ifdef _DEBUG
             for (int64_t i = 0; i < ssize(chunk); i++) {
