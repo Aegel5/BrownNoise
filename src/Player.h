@@ -19,9 +19,11 @@ class Player {
     SineGenerator sin;
     int m_channels;
     int channels() const { return m_channels; }
+    size_t bytes_per_frame() const { return ma_get_bytes_per_frame(ma_format_f32, channels()); }
     ma_hpf hpf; 
     ma_noise noise;
     Voss voss[2];
+    ma_pcm_rb rb;
 
     ma_gainer m_gainer; // проходим через барьер памяти, синхронизации не требуется.
 public:
@@ -40,11 +42,12 @@ public:
 
             config.periodSizeInFrames = CHUNK_SIZE;
             config.periods = 8;
+            config.noPreSilencedOutputBuffer = true;
 
-            config.dataCallback = [](ma_device* pD, void* pOut, const void*, ma_uint32 fCount) {
+            config.dataCallback = [](ma_device* pD, void* pOut_, const void*, ma_uint32 fCount) {
 
                 auto* self = (Player*)pD->pUserData;
-                float* out = (float*)pOut;
+                uint8_t* out = (uint8_t*)pOut_;
 
                 size_t r = self->m_r.load(std::memory_order_relaxed);
                 const float* chunkData = self->m_chunks[r % TOTAL_CHUNKS].data();
@@ -56,7 +59,7 @@ public:
                         self->m_last_volume = vol;
                         ma_gainer_set_gain(&self->m_gainer, vol);
                     }
-                    ma_gainer_process_pcm_frames(&self->m_gainer, pOut, chunkData, CHUNK_SIZE);
+                    ma_gainer_process_pcm_frames(&self->m_gainer, out, chunkData, CHUNK_SIZE);
                 }
 
                 //memcpy(pOut, chunkData, fCount * sizeof(float) * self->channels());
@@ -79,6 +82,11 @@ public:
                 std::terminate();
             }
         }
+
+        // ring buffer
+        //{
+        //    ma_pcm_rb_init(ma_format_f32, channels(), m_device.sampleRate * 3, 0, 0, &rb);
+        //}
 
         // Стандартный генератор
         {
