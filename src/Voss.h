@@ -36,12 +36,13 @@ private:
     }
 
 public:
+    int skip = 3;
     // beta: 0 - белый, 1 - розовый, 2 - коричневый (бас)
     Voss(int numGens = 10, float beta = 2.0f)
         : engine(std::random_device{}()), dist(-1.0f, 1.0f) {
         float sumSqWeights = 0.0f;
         int lastperiod = 0;
-        for (int i = 0; i < numGens; ++i) {
+        for (int i = 3; i < numGens; ++i) {
             Generator g;
             g.period = (int)std::round(std::pow(1.6f, (float)i));
             if (g.period <= lastperiod) g.period = lastperiod + 1;
@@ -63,14 +64,13 @@ public:
         // Статистическая нормализация (корень из суммы квадратов весов)
         // Коэффициент 2.0 дает плотный звук, который идеально ложится в лимитер
         //normFactor = std::sqrt(sumSqWeights) * 2.0f;
-        normFactor = std::sqrt((float)numGens-3) * 2.5f; // 3 удаляем
+        normFactor = std::sqrt((float)numGens-skip) * 2.5f; // 3 удаляем
     }
 
     float getNext() {
         float rawSum = 0.0f;
 
-        for (int i = 3; i < gens.size(); i++) {
-            auto& g = gens[i];
+        for (auto& g: gens) {
             g.currentVal += g.step;
             rawSum +=   g.currentVal * g.weight;
             if (++g.timer >= g.period) {
