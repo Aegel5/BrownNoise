@@ -8,7 +8,7 @@
 
 class Player {
     static constexpr uint32_t CHUNK_SIZE = 1024; 
-    static constexpr size_t TOTAL_CHUNKS = 256;
+    static constexpr size_t TOTAL_CHUNKS = 256; 
 
     enum SoundType {
         SND_Voss,
@@ -86,7 +86,7 @@ public:
 
         // Фильтр низких частот.
         {
-            auto cfg = ma_hpf_config_init(ma_format_f32, channels(), m_device.sampleRate, 50, 1); // order 1 может не хватить для борьбы с залипанием мембраны.
+            auto cfg = ma_hpf_config_init(ma_format_f32, channels(), m_device.sampleRate, 50, 2); // order 1 может не хватить для борьбы с залипанием мембраны.
             if (ma_hpf_init(&cfg, 0, &hpf)) {
                 std::terminate();
             }
