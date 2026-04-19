@@ -38,7 +38,7 @@ private:
 public:
     int skip = 3;
     // beta: 0 - белый, 1 - розовый, 2 - коричневый (бас)
-    Voss(int numGens = 10, float beta = 2.0f)
+    Voss(int numGens = 15, float beta = 2.0f)
         : engine(std::random_device{}()), dist(-1.0f, 1.0f) {
         float sumSqWeights = 0.0f;
         int lastperiod = 0;
