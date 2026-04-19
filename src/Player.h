@@ -21,7 +21,7 @@ class Player {
     SineGenerator sin;
     int m_channels;
     int channels() const { return m_channels; }
-    size_t bytes_per_frame() const { return ma_get_bytes_per_frame(ma_format_f32, channels()); }
+    size_t bytes_per_frame() const { return sizeof(float)*channels(); }
     ma_hpf hpf; 
     ma_noise noise;
     ma_noise noise_pink;
