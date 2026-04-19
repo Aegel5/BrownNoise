@@ -84,7 +84,7 @@ public:
 
         // Фильтр низких частот.
         {
-            auto cfg = ma_hpf_config_init(ma_format_f32, channels(), m_device.sampleRate, 1, 2); // order 1 может не хватить для борьбы с залипанием мембраны.
+            auto cfg = ma_hpf_config_init(ma_format_f32, channels(), m_device.sampleRate, 10, 2); // order 1 может не хватить для борьбы с залипанием мембраны.
             if (ma_hpf_init(&cfg, 0, &hpf)) {
                 std::terminate();
             }
