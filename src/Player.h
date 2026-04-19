@@ -7,8 +7,6 @@
 #include "SinGenerate.h"
 
 class Player {
-    static constexpr uint32_t CHUNK_SIZE = 1024; 
-    static constexpr size_t TOTAL_CHUNKS = 256; 
 
     enum SoundType {
         SND_Voss,
@@ -18,11 +16,7 @@ class Player {
     } sound_mode { SND_Voss };
 
     ma_device m_device;
-    std::vector<std::vector<float>> m_chunks;
-    std::atomic<int64_t> m_r{ 0 };
-    int64_t m_w = 0;
     std::atomic<float> m_volume = 0;
-    float m_last_volume = 0;
     Red1 red1[2];
     SineGenerator sin;
     int m_channels;
@@ -47,9 +41,8 @@ public:
             auto config = ma_device_config_init(ma_device_type_playback);
 
             config.playback.format = ma_format_f32;
-            //config.playback.channels = 1;
-
-            config.periodSizeInFrames = CHUNK_SIZE;
+            config.noFixedSizedCallback = true;
+            config.periodSizeInFrames = 1024;
             config.periods = 8;
             config.noPreSilencedOutputBuffer = true;
 
@@ -58,22 +51,29 @@ public:
                 auto* self = (Player*)pD->pUserData;
                 uint8_t* out = (uint8_t*)pOut_;
 
-                size_t r = self->m_r.load(std::memory_order_relaxed);
-                const float* chunkData = self->m_chunks[r % TOTAL_CHUNKS].data();
-
                 // громоксть - самая частая операция, делаем прямо в audio-потоке, чтобы не перегенеривать весь буфер.
                 {
                     auto vol = self->m_volume.load(std::memory_order_relaxed);
-                    if (vol != self->m_last_volume) {
-                        self->m_last_volume = vol;
+                    if (vol != self->m_gainer.pNewGains[0]) {
                         ma_gainer_set_gain(&self->m_gainer, vol);
                     }
-                    ma_gainer_process_pcm_frames(&self->m_gainer, out, chunkData, CHUNK_SIZE);
                 }
 
-                //memcpy(pOut, chunkData, fCount * sizeof(float) * self->channels());
+                while (fCount > 0) {
+                    auto frames_to_read = fCount;
+                    void* input;
+                    auto res = ma_pcm_rb_acquire_read(&self->rb, &frames_to_read, &input);
+                    if (frames_to_read == 0) break;
+                    ma_gainer_process_pcm_frames(&self->m_gainer, out, input, frames_to_read);
+                    out += frames_to_read * self->bytes_per_frame();
+                    fCount -= frames_to_read;
+                    ma_pcm_rb_commit_read(&self->rb, frames_to_read);
+                }
 
-                self->m_r.store(r + 1, std::memory_order_relaxed);
+                if (fCount > 0) {
+                    // underflow
+                    memset(out, 0, fCount * self->bytes_per_frame());
+                }
 
                 };
             config.pUserData = this;
@@ -82,20 +82,18 @@ public:
             m_channels = m_device.playback.channels;
         }
 
-        m_chunks.resize(TOTAL_CHUNKS, std::vector<float>(CHUNK_SIZE*channels()));
-
         // Фильтр низких частот.
         {
-            auto cfg = ma_hpf_config_init(ma_format_f32, channels(), m_device.sampleRate, 50, 2); // order 1 может не хватить для борьбы с залипанием мембраны.
+            auto cfg = ma_hpf_config_init(ma_format_f32, channels(), m_device.sampleRate, 300, 2); // order 1 может не хватить для борьбы с залипанием мембраны.
             if (ma_hpf_init(&cfg, 0, &hpf)) {
                 std::terminate();
             }
         }
 
         // ring buffer
-        //{
-        //    ma_pcm_rb_init(ma_format_f32, channels(), m_device.sampleRate * 3, 0, 0, &rb);
-        //}
+        {
+            ma_pcm_rb_init(ma_format_f32, channels(), m_device.sampleRate * 2, 0, 0, &rb);
+        }
 
         // Стандартный генератор
         {
@@ -131,18 +129,27 @@ public:
 
     void step() {
         auto ch = channels();
-        while (m_w - m_r.load(std::memory_order_relaxed) < TOTAL_CHUNKS) {
-            auto& chunk = m_chunks[m_w % TOTAL_CHUNKS];
+        while (true) {
+
+            ma_uint32 framesCount = 1024;
+            float* out = nullptr;
+            {
+                void* data_;
+                ma_pcm_rb_acquire_write(&rb, &framesCount, &data_);
+                if (framesCount == 0) 
+                    break;
+                out = (float*)data_;
+            }
 
             if (sound_mode == SND_BrownStandart) {
                 // стандартный генератор
-                ma_noise_read_pcm_frames(&noise, &chunk[0], CHUNK_SIZE, 0);
+                ma_noise_read_pcm_frames(&noise, out, framesCount, 0);
             }
             else if (sound_mode == SND_PinkStandart) {
-                ma_noise_read_pcm_frames(&noise_pink, &chunk[0], CHUNK_SIZE, 0);
+                ma_noise_read_pcm_frames(&noise_pink, out, framesCount, 0);
             }
             else {
-                for (int64_t i = 0; i < CHUNK_SIZE; i++) {
+                for (int64_t i = 0; i < framesCount; i++) {
 
                     float left = 0, right = 0;
 
@@ -157,34 +164,34 @@ public:
                     }
 
                     if (ch == 6) { // Спец-обработка для 5.1
-                        chunk[i * ch + 0] = left;              // Front L
-                        chunk[i * ch + 1] = right;             // Front R
-                        chunk[i * ch + 2] = (left + right) * 0.5f; // Center
-                        chunk[i * ch + 3] = (left + right) * 0.5f; // LFE (Саб)
-                        chunk[i * ch + 4] = left;              // Surround L
-                        chunk[i * ch + 5] = right;             // Surround R
+                        out[i * ch + 0] = left;              // Front L
+                        out[i * ch + 1] = right;             // Front R
+                        out[i * ch + 2] = (left + right) * 0.5f; // Center
+                        out[i * ch + 3] = (left + right) * 0.5f; // LFE (Саб)
+                        out[i * ch + 4] = left;              // Surround L
+                        out[i * ch + 5] = right;             // Surround R
                     }
                     else {
                         for (int64_t j = 0; j < ch; j++) {
-                            chunk[i * ch + j] = (j & 1) ? right : left;
+                            out[i * ch + j] = (j & 1) ? right : left;
                         }
                     }
                 }
             }
 
             // накладываем ФВЧ: централизуем график возле 0 (нормализуем мембрану), а также убираем весь неслышимый инфра-мусор (звук меньше 10 ГЦ).
-            ma_hpf_process_pcm_frames(&hpf, &chunk[0], &chunk[0], CHUNK_SIZE);
+            ma_hpf_process_pcm_frames(&hpf, out, out, framesCount);
 
             //ma_gainer_process_pcm_frames(&gainer, &chunk[0], &chunk[0], CHUNK_SIZE);
 
 #ifdef _DEBUG
-            for (int64_t i = 0; i < ssize(chunk); i++) {
-                if (chunk[i] > 1.0 || chunk[i] < -1.0) {
+            for (int64_t i = 0; i < framesCount * channels(); i++) {
+                if (out[i] > 1.0 || out[i] < -1.0) {
                     std::terminate();
                 }
             }
 #endif
-            m_w++;
+            ma_pcm_rb_commit_write(&rb, framesCount);
         }
     }
 };
