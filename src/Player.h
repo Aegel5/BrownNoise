@@ -7,8 +7,6 @@
 #include "SinGenerate.h"
 
 class Player {
-
-
     SoundType sound_mode{ SND_Voss };
 
     ma_device m_device;
