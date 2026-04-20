@@ -24,71 +24,93 @@ using json = nlohmann::json;
 #include "Rand.h"
 #include "Player.h"
 
+#include "imgui.h"
+#include "backends_layer.h"
 
-int main(int argc, char* argv[])
+Player player;
+
+static void Draw() {
+	if (ImGui::BeginCombo("Mode", SoundTypeName(Settings::data.last_mode))) {
+		for (auto type : { SND_Voss, SND_BrownStandart, SND_PinkStandart, SND_BrownRibbon }) {
+			if (ImGui::Selectable(SoundTypeName(type), Settings::data.last_mode == type)) {
+				if (Settings::data.last_mode != type) {
+					Settings::data.last_mode = type;
+					Settings::Save();
+					player.SetMode(type);
+				}
+			}
+		}
+		ImGui::EndCombo();
+	}
+
+	if (ImGui::SliderFloat("Volume", &Settings::data.volume, 0, 2)) {
+		Settings::Save();
+		player.set_volume(Settings::data.volume);
+	}
+	if (ImGui::Button("Restore")) {
+		Settings::data.volume = Settings::init_vol;
+		Settings::Save();
+		player.set_volume(Settings::data.volume);
+	}
+}
+
+
+int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow)
 {
     setlocale(LC_ALL, ".utf8");
 
     Settings::Load();
+	player.set_volume(Settings::data.volume);
+	player.SetMode(Settings::data.last_mode);
+	player.start();
 
-    // Лямбда-функция прямо внутри main для создания задачи чтения
-    auto get_input = []() {
-        return std::async(std::launch::async, []() {
-            std::string s;
-            return std::getline(std::cin, s) ? s : std::string("exit");
-            });
-        };
+	if (!ImBackends::Init(L"Window", 600, 300))	return 1;
+	//if (!ImBackends::InitDisableMainViewport())	return 1;
 
-    std::cout << std::format("Brown Noise Version 1.5\n");
+	{
+		ImGuiIO& io = ImGui::GetIO(); (void)io;
+		io.ConfigInputTextCursorBlink = false;
+		io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;     // Enable Keyboard Controls
+		ImGuiStyle& style = ImGui::GetStyle();
+		style.ScaleAllSizes(ImBackends::main_scale);        // Bake a fixed style scale. (until we have a solution for dynamic style scaling, changing this requires resetting Style + calling this again)
+		style.FontScaleDpi = ImBackends::main_scale;        // Set initial font scale. (in docking branch: using io.ConfigDpiScaleFonts=true automatically overrides this for every window depending on the current monitor)
+		io.ConfigDpiScaleFonts = true;          // [Experimental] Automatically overwrite style.FontScaleDpi in Begin() when Monitor DPI changes. This will scale fonts but _NOT_ scale sizes/padding for now.
+		io.ConfigDpiScaleViewports = true;      // [Experimental] Scale Dear ImGui and Platform Windows when Monitor DPI changes.
+	}
 
-    Player player;
-
-    auto set_volume = [&](float f) {
-        f = std::clamp(f, 0.0f, 200.0f);
-        std::cout << std::format("Volume: {}\n", f);
-        player.set_volume(f / 100);
-        if (f != Settings::data.volume) {
-            Settings::data.volume = f;
-            Settings::Save();
-        }
-        };
-
-    set_volume(Settings::data.volume);
-    player.start();
-
-    std::cout << "Введите команду: число для установки Volume или exit для выхода" << std::endl;
+	// Setup Platform/Renderer backends
+	ImBackends::InitRenders();
 
 
-    // Инициализируем первое ожидание
-    auto future_input = get_input();
+	ImBackends::CreateTimer([&]() {
+		player.step();
+		}, 200);
 
-    while (true) {
-        // Проверяем, готов ли результат (ждем 0 миллисекунд)
-        if (future_input.wait_for(std::chrono::seconds(0)) == std::future_status::ready) {
-            std::string result = future_input.get();
+	while (ImBackends::WaitNewFrame()) {
 
-            if (result == "exit") {
-                break;
-            }
+		ImBackends::NewFrame();
 
-            // Если хотим читать дальше, нужно перезапустить future
-            future_input = get_input();
+		ImGuiViewport* viewport = ImGui::GetMainViewport();
+		ImGui::SetNextWindowPos(viewport->Pos);
+		ImGui::SetNextWindowSize(viewport->Size);
+		ImGuiWindowFlags window_flags = ImGuiWindowFlags_NoDecoration |
+			ImGuiWindowFlags_NoMove |
+			ImGuiWindowFlags_NoResize |
+			ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoSavedSettings;
+		//ImGuiWindowFlags window_flags = ImGuiWindowFlags_NoCollapse;
+		static bool open = true;
+		if (ImGui::Begin("Hello, world!", &open, window_flags)) {
+			Draw();
+			ImGui::End();
+		}
+		if (!open) break;
 
-            float val = 0;
-            // Пытаемся преобразовать строку в число
-            auto [ptr, ec] = std::from_chars(result.data(), result.data() + result.size(), val);
+		ImBackends::RenderVSync();
 
-            // Если ошибок нет (ec == success) и мы дошли до конца строки (ptr == end)
-            if (ec == std::errc() && ptr == result.data() + result.size()) {
-                set_volume(val);
-                continue;
-            }
+	}
 
-        }
+	ImBackends::Cleanup();
 
-        player.step();
-        std::this_thread::sleep_for(std::chrono::milliseconds(200));
-    }
 
     return 0;
 }

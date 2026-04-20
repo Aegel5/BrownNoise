@@ -8,12 +8,8 @@
 
 class Player {
 
-    enum SoundType {
-        SND_Voss,
-        SND_BrownStandart,
-        SND_PinkStandart,
-        SND_BrownRibbon
-    } sound_mode { SND_Voss };
+
+    SoundType sound_mode{ SND_Voss };
 
     ma_device m_device;
     std::atomic<float> m_volume = 0;
@@ -29,7 +25,26 @@ class Player {
     ma_pcm_rb rb;
 
     ma_gainer m_gainer; // проходим через барьер памяти, синхронизации не требуется.
+    bool inited = false;
 public:
+    void hpf_reinit(float f = 10.0) {
+        if (inited) ma_hpf_uninit(&hpf, 0);
+        auto conf = ma_hpf_config_init(ma_format_f32, channels(), m_device.sampleRate, f, 2);
+        if (ma_hpf_init(&conf, 0, &hpf)) {
+            std::terminate();
+        }
+    }
+    void noise_reinit() {
+        if(inited) ma_noise_uninit(&noise, 0);
+        auto cfg = ma_noise_config_init(ma_format_f32, channels(), ma_noise_type_brownian, 0, 0.45);
+        ma_noise_init(&cfg, 0, &noise);
+    }
+    void SetMode(SoundType t) {
+        sound_mode = t;
+        ma_pcm_rb_reset(&rb);
+        hpf_reinit(t == SND_BrownStandart ? 50 : 10);
+        noise_reinit();
+    }
     void start() {
         step(); // забиваем буфер
         ma_device_start(&m_device);
@@ -82,24 +97,10 @@ public:
             m_channels = m_device.playback.channels;
         }
 
-        // Фильтр низких частот.
-        {
-            auto cfg = ma_hpf_config_init(ma_format_f32, channels(), m_device.sampleRate, 10, 2); // order 1 может не хватить для борьбы с залипанием мембраны.
-            if (ma_hpf_init(&cfg, 0, &hpf)) {
-                std::terminate();
-            }
-        }
+        hpf_reinit();
+        noise_reinit();
+        ma_pcm_rb_init(ma_format_f32, channels(), m_device.sampleRate * 2, 0, 0, &rb);
 
-        // ring buffer
-        {
-            ma_pcm_rb_init(ma_format_f32, channels(), m_device.sampleRate * 2, 0, 0, &rb);
-        }
-
-        // Стандартный генератор
-        {
-            auto cfg = ma_noise_config_init(ma_format_f32, channels(), ma_noise_type_brownian, 0, 0.5);
-            ma_noise_init(&cfg, 0, &noise);
-        }
         {
             auto cfg = ma_noise_config_init(ma_format_f32, channels(), ma_noise_type_pink, 0, 0.5);
             ma_noise_init(&cfg, 0, &noise_pink);
@@ -187,7 +188,9 @@ public:
 #ifdef _DEBUG
             for (int64_t i = 0; i < framesCount * channels(); i++) {
                 if (out[i] > 1.0 || out[i] < -1.0) {
-                    std::terminate();
+                    auto bad = out[i];
+                    int k = 0;
+                    //std::terminate();
                 }
             }
 #endif
