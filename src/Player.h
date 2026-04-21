@@ -8,7 +8,6 @@
 
 class Player {
     SoundType sound_mode{ SND_Voss };
-
     ma_device m_device;
     std::atomic<float> m_volume = 0;
     Red1 red1[2];
@@ -24,8 +23,13 @@ class Player {
 
     ma_gainer m_gainer; // проходим через барьер памяти, синхронизации не требуется.
     bool inited = false;
+    bool isDeflow = false;
+    bool stepcalled = false;
 public:
-    void hpf_reinit(float f = 10.0) {
+
+    bool IsUnderflow() { return isDeflow; }
+
+    void hpf_reinit(float f = 50) {
         if (inited) ma_hpf_uninit(&hpf, 0);
         auto conf = ma_hpf_config_init(ma_format_f32, channels(), m_device.sampleRate, f, 2);
         if (ma_hpf_init(&conf, 0, &hpf)) {
@@ -40,8 +44,10 @@ public:
     void SetMode(SoundType t) {
         sound_mode = t;
         ma_pcm_rb_reset(&rb);
-        hpf_reinit(t == SND_BrownStandart ? 50 : 10);
+        hpf_reinit();
         noise_reinit();
+        isDeflow = false;
+        stepcalled = false;
     }
     void start() {
         step(); // забиваем буфер
@@ -84,6 +90,7 @@ public:
                 }
 
                 if (fCount > 0) {
+                    if(self->stepcalled) self->isDeflow = true;
                     // underflow
                     memset(out, 0, fCount * self->bytes_per_frame());
                 }
@@ -111,6 +118,8 @@ public:
             ma_gainer_set_master_volume(&m_gainer, 1.0f);
             ma_gainer_set_gain(&m_gainer, 0.0f);
         }
+
+        inited = true;
 
     }
 
@@ -193,6 +202,9 @@ public:
             }
 #endif
             ma_pcm_rb_commit_write(&rb, framesCount);
+            stepcalled = true;
         }
+
+
     }
 };

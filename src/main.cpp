@@ -52,6 +52,9 @@ static void Draw() {
 		Settings::Save();
 		player.set_volume(Settings::data.volume);
 	}
+	if (player.IsUnderflow()) {
+		ImGui::Text("deflow");
+	}
 }
 
 
