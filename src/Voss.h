@@ -45,7 +45,7 @@ public:
         : engine(std::random_device{}()), dist(-1.0f, 1.0f) {
         float sumSqWeights = 0.0f;
         int lastperiod = 0;
-        for (int i = 3; i < numGens; ++i) {
+        for (int i = skip; i < numGens; ++i) {
             Generator g;
             g.period = (int)std::round(std::pow(1.6f, (float)i));
             if (g.period <= lastperiod) g.period = lastperiod + 1;
