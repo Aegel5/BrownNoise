@@ -25,14 +25,17 @@ private:
 
     // Тот самый soft limiter: до 90% от maxAmp звук линеен, выше — плавно поджимается
     float softLimit(float x) {
-        float threshold = maxAmp * 0.95f;
+        const float threshold = 0.95f;
+        const float margin = 1.0f - threshold; // 0.05
+
         float absX = std::abs(x);
 
         if (absX <= threshold) return x;
 
-        // Плавно скругляем пик, чтобы не выйти за maxAmp
-        float limit = threshold + (maxAmp - threshold) * std::tanh((absX - threshold) / (maxAmp - threshold));
-        return (x > 0) ? limit : -limit;
+        // Считаем лимит: к порогу добавляем сжатый остаток
+        float soft = threshold + margin * std::tanh((absX - threshold) / margin);
+
+        return (x > 0) ? soft : -soft;
     }
 
 public:
@@ -61,10 +64,10 @@ public:
             gens.push_back(g);
         }
 
-        // Статистическая нормализация (корень из суммы квадратов весов)
-        // Коэффициент 2.0 дает плотный звук, который идеально ложится в лимитер
-        //normFactor = std::sqrt(sumSqWeights) * 2.0f;
-        normFactor = std::sqrt((float)numGens-skip) * 2.5f; // 3 удаляем
+        // Статистическая нормализация (3 сигмы = 1.73 * sqrt(n). Возьмем с запасом + softLimit для страховки)
+        auto cnt = (float)numGens - skip;
+
+        normFactor = 1.0f / std::min(std::sqrt(cnt) * 2.4f, cnt);
     }
 
     float getNext() {
@@ -82,12 +85,12 @@ public:
         }
 
         // 1. Приводим к базовой амплитуде
-        float output = rawSum / normFactor;
-
-        // 2. Масштабируем под ваше "окно" 0.5
-        output *= maxAmp;
+        float output = rawSum * normFactor;
 
         // 3. Страхуем лимитером от редких случайных всплесков
-        return softLimit(output);
+        output = softLimit(output);
+
+        // 2. Масштабируем под ваше "окно" 0.5
+        return output * maxAmp;
     }
 };
