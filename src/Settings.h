@@ -13,7 +13,7 @@ inline const char* SoundTypeName(SoundType t) {
 }
 
 struct _Settings {
-    float volume = 5;
+    float volume = 0.05;
     SoundType last_mode = SND_Voss;
 };
 
